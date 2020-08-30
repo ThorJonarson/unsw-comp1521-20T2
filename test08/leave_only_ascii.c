@@ -1,0 +1,28 @@
+#include <stdio.h>
+
+
+int main(int argc, char *argv[]) {
+    FILE *in = fopen(argv[1], "r");
+    FILE *tmp = fopen("temp", "a");
+    int character = fgetc(in);
+    while (character != EOF) {
+        if (character < 128 || character > 255) {
+            fputc(character, tmp);
+        }
+        character = fgetc(in);
+    }
+    fclose(in);
+    fclose(tmp);
+    in = fopen(argv[1], "w");
+    fclose(in);
+    in = fopen(argv[1], "a");
+    tmp = fopen("temp", "r");
+    character = fgetc(tmp);
+    while (character != EOF) {
+        fputc(character, in);
+        character = fgetc(tmp);
+    }
+    fclose(tmp);
+    tmp = fopen("temp", "w");
+    return 0;
+}

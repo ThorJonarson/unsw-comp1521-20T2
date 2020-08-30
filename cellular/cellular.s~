@@ -1,0 +1,347 @@
+########################################################################
+# COMP1521 20T2 --- assignment 1: a cellular automaton renderer
+#
+# Written by Haoheng Duan(z5248147), July 2020.
+
+# This code runs a one-dimensional, three-neighbour cellular automaton.
+# It examines its neighbours and its value in the previous generation
+# to derive the value for the next generation.
+
+
+# Maximum and minimum values for the 3 parameters.
+
+MIN_WORLD_SIZE  =    1
+MAX_WORLD_SIZE  =  128
+MIN_GENERATIONS = -256
+MAX_GENERATIONS =  256
+MIN_RULE    =    0
+MAX_RULE    =  255
+
+# Characters used to print alive/dead cells.
+
+ALIVE_CHAR	= '#'
+DEAD_CHAR	= '.'
+
+# Maximum number of bytes needs to store all generations of cells.
+
+MAX_CELLS_BYTES	= (MAX_GENERATIONS + 1) * MAX_WORLD_SIZE
+
+    .data
+
+# `cells' is used to store successive generations.  Each byte will be 1
+# if the cell is alive in that generation, and 0 otherwise.
+
+cells:  .space MAX_CELLS_BYTES
+
+
+# Some strings you'll need to use:
+
+prompt_world_size:  .asciiz "Enter world size: "
+error_world_size:   .asciiz "Invalid world size\n"
+prompt_rule:        .asciiz "Enter rule: "
+error_rule:	        .asciiz "Invalid rule\n"
+prompt_n_generations:   .asciiz "Enter how many generations: "
+error_n_generations:    .asciiz "Invalid number of generations\n"
+
+    .text
+    
+    # $s0 is used for world_size
+    # $s1 is used for rule
+    # $s2 is used for n_generations
+    # reverse is in register $t0
+    # g is in register $t1
+    # $t2, $t3, $t4 used to hold temporary results
+    
+main:
+    # read 3 integer parameters from stdin
+    la   $a0, prompt_world_size
+    li   $v0, 4
+    syscall                 # printf("Enter world size: ")
+
+    li   $v0, 5
+    syscall
+    move $s0, $v0           # scanf("%d", &world_size)
+
+    blt  $s0, MIN_WORLD_SIZE, if_invalid_world_size
+    bgt  $s0, MAX_WORLD_SIZE, if_invalid_world_size
+    b    end_invalid_world_size
+    
+if_invalid_world_size:      
+    la   $a0, error_world_size
+    li   $v0, 4
+    syscall                 # printf("Invalid world size\n")
+    
+    li   $v0, 10
+    syscall                 # return 1
+    
+end_invalid_world_size:
+    la   $a0, prompt_rule
+    li   $v0, 4
+    syscall                 # printf("Enter rule: ")
+    
+    li   $v0, 5
+    syscall
+    move $s1, $v0           # scanf("%d", &rule)
+
+    blt  $s1, MIN_RULE, if_invalid_rule
+    bgt  $s1, MAX_RULE, if_invalid_rule
+    b    end_invalid_rule
+
+if_invalid_rule:
+    la   $a0, error_rule
+    li   $v0, 4
+    syscall                 # printf("Invalid rule\n")
+ 
+
+    li   $v0, 10
+    syscall                 # return 1
+
+end_invalid_rule:
+    la   $a0, prompt_n_generations
+    li   $v0, 4
+    syscall                 # printf("Enter how many generations: ")
+    
+    li   $v0, 5
+    syscall
+    move $s2, $v0           # scanf("%d", &n_generations)
+
+    blt  $s2, MIN_GENERATIONS, if_invalid_generations
+    bgt  $s2, MAX_GENERATIONS, if_invalid_generations
+    b    end_invalid_generations
+    
+if_invalid_generations:
+    la   $a0, error_n_generations
+    li   $v0, 4
+    syscall                 # printf("Invalid number of generations\n")
+    
+    li   $v0, 10
+    syscall                 # return 1
+    
+end_invalid_generations:
+    li   $a0, '\n'
+    li   $v0, 11
+    syscall                 # putchar('\n')
+    
+    # negative generations means show the generations in reverse
+    li   $t0, 0             # reverse = 0
+    bge  $s2, 0, end_n_generation_negative
+    
+if_n_generation_negative:
+    li   $t0, 1             # reverse
+    negu $s2, $s2           # n_generations = -n_generations
+    
+end_n_generation_negative:
+    # the first generation always has a only single cell which is alive
+    # this cell is in the middle of the world
+    li   $t2, 2
+    divu $s0, $t2
+    mflo $t2                # world_size / 2
+    la   $t3, cells
+    add  $t3, $t3, $t2
+    li   $t4, 1
+    sb   $t4, ($t3)         # cells[0][world_size / 2] = 1;
+       
+    li   $t1, 1             # g = 1
+    
+loop_run_in_generations:
+    bgt  $t1, $s2, end_loop_run_in_generations
+    
+    move $a0, $s0           # world_size
+    move $a1, $t1           # g
+    move $a2, $s1           # rule
+    
+    sw   $ra, ($sp)         # save $ra on $stack
+    jal  run_generation
+    lw   $ra, ($sp)         # recover $ra from $stack
+    
+    add  $t1, $t1, 1        # g++
+    b    loop_run_in_generations
+    
+end_loop_run_in_generations:
+    beq  $t0, 0, else_not_reverse
+    
+if_reverse:
+    move $t1, $s2           # g = n_generations
+    
+loop_reverse_print:
+    blt  $t1, 0, end_loop_reverse_print
+
+    move $a1, $s0           # world_size
+    move $a2, $t1           # g
+    
+    sw   $ra, ($sp)         # save $ra on $stack
+    jal  print_generation
+    lw   $ra, ($sp)         # recover $ra from $stack
+
+    sub  $t1, $t1, 1        # g--
+    b    loop_reverse_print
+    
+end_loop_reverse_print:
+    b    end_reverse
+    
+else_not_reverse:
+    li   $t1, 0             # g = 0
+    
+loop_non_reverse_print:  
+    bgt  $t1, $s2, end_loop_non_reverse_print
+    
+    move $a1, $s0           # world_size
+    move $a2, $t1           # g
+    
+    sw   $ra, ($sp)         # save $ra on $stack
+    jal  print_generation
+    lw   $ra, ($sp)         # recover $ra from $stack
+    
+    add  $t1, $t1, 1        # g++
+    b    loop_non_reverse_print
+    
+end_loop_non_reverse_print:  
+
+end_reverse:  
+    li   $v0, 0             # return 0 from function main
+    jr   $ra
+    
+
+
+    #
+    # Given `world_size', `which_generation', and `rule', calculate
+    # a new generation according to `rule' and store it in `cells'.
+    #
+
+    # $a0 is register for world_size
+    # $a1 is register for which_generation
+    # $a2 is register for rule
+    # $t2 is register for x
+    # $t3 is register for set
+    # $t4, $t5 used to hold temporary results
+    # $s3 is register for left
+    # $s4 is register for centre
+    # $s5 is register for right
+    # $s6 is register for state 
+    # $s7 is register for bit
+    
+run_generation:
+    li   $t2, 0             # x = 0
+    
+loop_run_in_world_size:
+    bge  $t2, $a0, end_loop_run_in_world_size
+    li   $s3, 0             # left = 0
+    ble  $t2, 0, end_x_positive
+    
+if_x_positive:
+    sub  $t4, $a1, 1        # which_generation - 1
+    mul  $t4, $t4, $a0
+    sub  $t5, $t2, 1        # x - 1
+    add  $t4, $t5, $t4
+    la   $t5, cells         # cells
+    add  $t4, $t4, $t5
+    lb   $s3, ($t4)         # left = cells[which_generation - 1][x - 1]
+
+end_x_positive:
+    sub  $t4, $a1, 1        # which_generation - 1
+    mul  $t4, $t4, $a0
+    add  $t4, $t2, $t4
+    la   $t5, cells
+    add  $t4, $t4, $t5
+    lb   $s4, ($t4)         # centre = cells[which_generation - 1][x]
+    
+    li   $s5, 0             # right = 0
+    sub  $t5, $a0, 1        # world_size - 1
+    bge  $t2, $t5, end_x_less
+    
+if_x_less:
+    sub  $t4, $a1, 1        # which_generation - 1
+    mul  $t4, $t4, $a0
+    add  $t5, $t2, 1        # x + 1
+    add  $t4, $t5, $t4
+    la   $t5, cells
+    add  $t4, $t4, $t5
+    lb   $s5, ($t4)         # right = cells[which_generation - 1][x + 1]
+    
+end_x_less:
+    
+    # Convert the left, centre, and right states into one value.
+    sll  $s3, $s3, 2        # left = left << 2
+    sll  $s4, $s4, 1        # centre = centre << 1
+    sll  $s5, $s5, 0        # right = right << 0
+    or   $s6, $s3, $s4      # state = left | centre 
+    or   $s6, $s6, $s5      # state = state | right
+    # And check whether that bit is set or not in the rule.
+    # by testing the corresponding bit of the rule number.
+    li   $t5, 1
+    sllv $s7, $t5, $s6      # bit = 1 << state;
+    and  $t3, $a2, $s7      # set = rule & bit;
+    beq  $t3, 0, if_set_zero
+
+    mul  $t4, $a1, $a0
+    add  $t4, $t2, $t4
+    la   $t5, cells
+    add  $t4, $t4, $t5
+    li   $t5, 1
+    sb   $t5, ($t4)         # cells[which_generation][x] = 1
+    b    end_set_zero
+if_set_zero:    
+    mul  $t4, $a1, $a0
+    add  $t4, $t2, $t4
+    la   $t5, cells
+    add  $t4, $t4, $t5
+    li   $t5, 0
+    sb   $t5, ($t4)         # cells[which_generation][x] = 0
+end_set_zero:    
+    
+    add  $t2, $t2, 1        # x++
+    b    loop_run_in_world_size
+end_loop_run_in_world_size:
+
+    jr   $ra
+
+
+    #
+    # Given `world_size', and `which_generation', print out the
+    # specified generation.
+    #
+
+    #
+    # $a1 is register for world_size
+    # $a2 is register for which_generation
+    # $t2 is register for x
+    # $t3, $t4 used to hold temporary results
+print_generation:
+    move $a0, $a2           
+    li   $v0, 1
+    syscall                 # printf("%d", which_generation)
+    
+    li   $a0, '\t'
+    li   $v0, 11
+    syscall                 # putchar('\t')
+    
+    li   $t2, 0             # x = 0
+loop_print:
+    bge  $t2, $a1, end_loop_print
+    mul  $t3, $a1, $a2
+    add  $t3, $t3, $t2
+    la   $t4, cells
+    add  $t3, $t3, $t4
+    lb   $t4, ($t3)         # cells[which_generation][x]
+    beq  $t4, 0, else_if_dead
+
+if_alive:
+    li   $a0, ALIVE_CHAR
+    li   $v0, 11
+    syscall                 # putchar(ALIVE_CHAR)
+    
+    b    end_if
+else_if_dead:
+    li   $a0, DEAD_CHAR
+    li   $v0, 11
+    syscall                 # putchar(DEAD_CHAR)
+    
+end_if:    
+    add  $t2, $t2, 1        # x++
+    b    loop_print
+end_loop_print:
+    li   $a0, '\n'
+    li   $v0, 11
+    syscall                 # putchar('\n')
+
+    jr   $ra

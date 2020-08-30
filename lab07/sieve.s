@@ -1,0 +1,59 @@
+# Sieve of Eratosthenes
+# https://en.wikipedia.org/wiki/Sieve_of_Eratosthenes
+main:
+
+    # PUT YOUR CODE
+    li $t0, 0
+loop0:
+    bge, $t0, 1000, end_loop0
+    la $t1, prime
+    add $t2, $t1, $t0
+    li $t3, 1
+    sb $t3, ($t2)
+    add $t0, $t0, 1
+    b loop0
+end_loop0:
+    li $t0, 2
+    
+loop1:
+    bge, $t0, 1000, end_loop1
+    la $t1, prime
+    add $t2, $t1, $t0
+    lb $t3, ($t2)
+    beq $t3, 0, end_if
+if:
+    move $a0, $t0
+    li $v0, 1
+    syscall
+    
+    li $a0, '\n'
+    li $v0, 11
+    syscall
+    li $t5, 2
+    
+    mul $t4, $t5, $t0
+    
+loop2:
+    bge $t4, 1000, end_loop2
+    add $t5, $t1, $t4
+    li $t6, 0
+    sb $t6, ($t5)
+    add $t4, $t4, $t0
+    b loop2
+end_loop2:
+    
+
+end_if:
+
+    
+    add $t0, $t0, 1
+    b loop1
+end_loop1:
+    
+
+    li $v0, 0           # return 0
+    jr $31
+
+.data
+prime:
+    .space 1000

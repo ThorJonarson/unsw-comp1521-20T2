@@ -1,0 +1,20 @@
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <stdio.h>
+
+int main(int argc, char *argv[]) {
+    struct stat s;
+    if (stat(argv[1], &s) != -1){
+        if (((s.st_mode) & S_IFDIR) == S_IFDIR) {
+            printf("1\n");
+            return 0;
+        } else {
+            printf("0\n");
+            return 0;
+        }
+    } else {
+        printf("0\n");
+        return 0;
+    }
+    
+}
